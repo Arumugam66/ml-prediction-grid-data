@@ -30,8 +30,11 @@ jobs:
           fi
 
           if [ "$TARGET_BRANCH" = "develop" ]; then
-            if [ "$SOURCE_BRANCH" = "main" ]; then
-              echo "::error::❌ Invalid PR flow! Pull Requests from 'main' into 'develop' are restricted."
+            if [ "$SOURCE_BRANCH" = "build" ]; then
+              echo "::error::❌ Invalid PR flow! Pull Requests from 'build' into 'develop' are strictly BLOCKED."
+              exit 1
+            elif [ "$SOURCE_BRANCH" = "main" ]; then
+              echo "::error::❌ Invalid PR flow! Pull Requests from 'main' into 'develop' are strictly BLOCKED."
               exit 1
             else
               echo "✅ PR validation passed for target 'develop'"

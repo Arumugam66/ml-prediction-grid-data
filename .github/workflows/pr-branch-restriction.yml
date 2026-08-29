@@ -11,6 +11,7 @@ jobs:
   validate-branch-flow:
     name: Verify PR Source & Target Branch Rules
     runs-on: ubuntu-latest
+
     steps:
       - name: Check Branch Merge Restrictions
         run: |
@@ -20,23 +21,24 @@ jobs:
           echo "Target Branch (Base): $TARGET_BRANCH"
           echo "Source Branch (Head): $SOURCE_BRANCH"
 
+          # Rule 1: Only develop -> build
           if [ "$TARGET_BRANCH" = "build" ]; then
             if [ "$SOURCE_BRANCH" != "develop" ]; then
-              echo "::error::❌ Invalid PR flow! Pull Requests targeting 'build' must come ONLY from 'develop'. Received: '$SOURCE_BRANCH'."
+              echo "::error::❌ Invalid PR flow! Only 'develop' -> 'build' is allowed."
+              echo "::error::Received: '$SOURCE_BRANCH' -> '$TARGET_BRANCH'"
               exit 1
             else
               echo "✅ PR validation passed: 'develop' -> 'build'"
             fi
           fi
 
+          # Rule 2: Only main -> develop
           if [ "$TARGET_BRANCH" = "develop" ]; then
-            if [ "$SOURCE_BRANCH" = "build" ]; then
-              echo "::error::❌ Invalid PR flow! Pull Requests from 'build' into 'develop' are strictly BLOCKED."
-              exit 1
-            elif [ "$SOURCE_BRANCH" = "main" ]; then
-              echo "::error::❌ Invalid PR flow! Pull Requests from 'main' into 'develop' are strictly BLOCKED."
+            if [ "$SOURCE_BRANCH" != "main" ]; then
+              echo "::error::❌ Invalid PR flow! Only 'main' -> 'develop' is allowed."
+              echo "::error::Received: '$SOURCE_BRANCH' -> '$TARGET_BRANCH'"
               exit 1
             else
-              echo "✅ PR validation passed for target 'develop'"
+              echo "✅ PR validation passed: 'main' -> 'develop'"
             fi
           fi

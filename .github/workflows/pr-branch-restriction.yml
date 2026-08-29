@@ -21,10 +21,11 @@ jobs:
           echo "Target Branch (Base): $TARGET_BRANCH"
           echo "Source Branch (Head): $SOURCE_BRANCH"
 
-          # Rule 1: Only develop -> build
+          # develop -> build ONLY
           if [ "$TARGET_BRANCH" = "build" ]; then
             if [ "$SOURCE_BRANCH" != "develop" ]; then
-              echo "::error::❌ Invalid PR flow! Only 'develop' -> 'build' is allowed."
+              echo "::error::❌ Invalid PR flow!"
+              echo "::error::Only 'develop' -> 'build' is allowed."
               echo "::error::Received: '$SOURCE_BRANCH' -> '$TARGET_BRANCH'"
               exit 1
             else
@@ -32,10 +33,11 @@ jobs:
             fi
           fi
 
-          # Rule 2: Only main -> develop
+          # main -> develop ONLY
           if [ "$TARGET_BRANCH" = "develop" ]; then
             if [ "$SOURCE_BRANCH" != "main" ]; then
-              echo "::error::❌ Invalid PR flow! Only 'main' -> 'develop' is allowed."
+              echo "::error::❌ Invalid PR flow!"
+              echo "::error::Only 'main' -> 'develop' is allowed."
               echo "::error::Received: '$SOURCE_BRANCH' -> '$TARGET_BRANCH'"
               exit 1
             else

@@ -1,0 +1,39 @@
+name: Enforce PR Branch Restrictions
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches:
+      - build
+      - develop
+
+jobs:
+  validate-branch-flow:
+    name: Verify PR Source & Target Branch Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Branch Merge Restrictions
+        run: |
+          TARGET_BRANCH="${{ github.base_ref }}"
+          SOURCE_BRANCH="${{ github.head_ref }}"
+
+          echo "Target Branch (Base): $TARGET_BRANCH"
+          echo "Source Branch (Head): $SOURCE_BRANCH"
+
+          if [ "$TARGET_BRANCH" = "build" ]; then
+            if [ "$SOURCE_BRANCH" != "develop" ]; then
+              echo "::error::❌ Invalid PR flow! Pull Requests targeting 'build' must come ONLY from 'develop'. Received: '$SOURCE_BRANCH'."
+              exit 1
+            else
+              echo "✅ PR validation passed: 'develop' -> 'build'"
+            fi
+          fi
+
+          if [ "$TARGET_BRANCH" = "develop" ]; then
+            if [ "$SOURCE_BRANCH" = "main" ]; then
+              echo "::error::❌ Invalid PR flow! Pull Requests from 'main' into 'develop' are restricted."
+              exit 1
+            else
+              echo "✅ PR validation passed for target 'develop'"
+            fi
+          fi

@@ -1,0 +1,25 @@
+# ML Prediction Engine Configuration
+
+data:
+  raw_file_path: "grid_data.parquet"
+  resample_freq: "30m"
+  site_codes: ["RAMS001", "RAMS002", "EMS000182"]
+  target_cols: ["EBKwh_delta", "DGKwh_delta"]
+
+pipeline:
+  test_size: 0.2
+  random_state: 42
+  forecast_horizon: 24  # Default hours to forecast
+
+quality_gate:
+  min_r2: 0.70
+  max_rmse: 15.0
+  max_mape: 25.0
+
+registry:
+  artifacts_dir: "models_artifacts/xgboost"
+  active_pointer_file: "latest.json"
+
+server:
+  host: "127.0.0.1"
+  port: 8000

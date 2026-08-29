@@ -1,0 +1,9 @@
+{
+  "architecture": "MultiOutputRegressor(XGBRegressor)",
+  "target_variables": [
+    "EBKwh_delta",
+    "DGKwh_delta"
+  ],
+  "n_features": 51,
+  "model_file": "model.pkl"
+}

@@ -1,0 +1,44 @@
+{
+  "dataset_records": 10148,
+  "train_records": 8118,
+  "val_records": 2030,
+  "feature_count": 51,
+  "targets": [
+    "EBKwh_delta",
+    "DGKwh_delta"
+  ],
+  "quality_gate_summary": {
+    "overall_passed": true,
+    "thresholds": {
+      "min_r2": 0.7,
+      "max_rmse": 15.0,
+      "max_mape": 25.0
+    },
+    "metrics": {
+      "EBKwh_delta": {
+        "mae": 0.0001,
+        "rmse": 0.0001,
+        "r2": 1.0,
+        "mape": 0.0,
+        "quality_gate_passed": true
+      },
+      "DGKwh_delta": {
+        "mae": 0.0,
+        "rmse": 0.0,
+        "r2": 1.0,
+        "mape": 0.0,
+        "quality_gate_passed": true
+      }
+    }
+  },
+  "hyperparameters": {
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "random_state": 42
+  },
+  "version": "v7",
+  "saved_at": "2026-08-28T17:10:48.412904"
+}

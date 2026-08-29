@@ -1,0 +1,33 @@
+# XGBoost Model Hyperparameters and Feature Specifications
+
+xgboost:
+  n_estimators: 200
+  max_depth: 6
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  random_state: 42
+
+features:
+  time_features:
+    - "hour"
+    - "day_of_week"
+    - "day_of_month"
+    - "month"
+    - "is_weekend"
+    - "hour_sin"
+    - "hour_cos"
+    - "day_sin"
+    - "day_cos"
+
+  lag_spans: [1, 2, 3, 24, 48]
+  rolling_windows: [3, 6, 24]
+
+  domain_features:
+    - "TotalKw"
+    - "TotalPF"
+    - "TotalKVA"
+    - "AverageCurrent"
+    - "AveragePhasevoltage"
+    - "AverageLinevoltage"
+    - "Frequency"

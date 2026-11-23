@@ -25,8 +25,8 @@ flowchart TD
         TRIGGER --> CHK_BR{"Is branch Build / build?"}
         CHK_BR -- "No" --> SKIP["Skip Pipeline"]
         CHK_BR -- "Yes" --> STG1["1. Checkout build SCM into ${WORKSPACE}"]
-        STG1 --> STG2["2. Automated Tests & Schemas (scripts/run_all_tests.py)"]
-        STG2 --> STG3["3. Build Container (Python 3.11 + FastAPI + ML Predictor)"]
+        STG1 --> STG2["2. Build Production Container (Python 3.11 + FastAPI + ML Predictor)"]
+        STG2 --> STG3["3. Automated Tests inside Container (scripts/run_all_tests.py)"]
         STG3 --> STG4["4. Docker Compose Rolling Deploy (docker compose up -d)"]
         STG4 --> STG5["5. Health Check & Smoke Tests (scripts/health_check.sh)"]
         STG5 --> STG6["6. Clean Dangling Docker Images & Notify"]
@@ -95,6 +95,7 @@ Instead of maintaining a separate `/opt/...` host layout:
 ├── logs/                                                    <-- Local workspace logs folder (Auto-created)
 └── scripts/                                                 <-- Build, test & deployment scripts
     ├── run_all_tests.py                                     <-- Automated verification test suite
+    ├── run_tests.sh                                         <-- Container/virtualenv wrapper test runner
     ├── deploy.sh                                            <-- In-workspace deployment runner
     └── health_check.sh                                      <-- Health & Smoke test script
 ```
@@ -121,6 +122,7 @@ pipeline {
     environment {
         PYTHONUNBUFFERED = '1'
         APP_PORT = '8000'
+        IMAGE_NAME = 'ml-prediction-engine:latest'
     }
 
     stages {
@@ -141,15 +143,16 @@ pipeline {
                 checkout scm
             }
         }
+        stage('Build Container Image') {
+            steps {
+                echo "Building production container image: ${IMAGE_NAME}..."
+                sh "docker build -t ${IMAGE_NAME} -f Dockerfile ."
+            }
+        }
         stage('Run Automated Tests') {
             steps {
-                sh '''
-                    if command -v python3 >/dev/null 2>&1; then
-                        python3 scripts/run_all_tests.py
-                    else
-                        python scripts/run_all_tests.py
-                    fi
-                '''
+                echo "Executing automated test suite inside isolated container environment..."
+                sh "docker run --rm ${IMAGE_NAME} python scripts/run_all_tests.py"
             }
         }
         stage('Build & Deploy Stack') {
@@ -204,13 +207,14 @@ pipeline {
 
 ## 6. Implementation Status (All Artifacts Created & Updated)
 
-- [x] **Updated `Jenkinsfile`**: Added `triggers { pollSCM('H/2 * * * *') }` for automated polling from private IP.
-- [x] **`Dockerfile` & `.dockerignore`**: Python 3.11-slim container with FastAPI, XGBoost, scikit-learn, and built-in container healthcheck.
-- [x] **`requirements.txt`**: Complete production dependencies specification.
-- [x] **`deploy/docker-compose.prod.yml`**: Docker Named Volumes (`ml_models_data`, `ml_logs_data`), internal network `ml-grid-net`, container healthchecks, and auto-restart policy.
+- [x] **Updated `Jenkinsfile`**: Added `triggers { pollSCM('H/2 * * * *') }`, automated container build (`Build Container Image`), and container-isolated testing (`docker run --rm ${IMAGE_NAME} python scripts/run_all_tests.py`).
+- [x] **`Dockerfile` & `.dockerignore`**: Python 3.11-slim container with FastAPI, XGBoost, scikit-learn, pyarrow, and built-in container healthcheck.
+- [x] **`requirements.txt`**: Complete production dependencies specification (fastapi, uvicorn, scikit-learn, xgboost, pyarrow, pandas, pyyaml).
+- [x] **`deploy/docker-compose.prod.yml`**: Explicit `image: ml-prediction-engine:latest` tag, Docker Named Volumes (`ml_models_data`, `ml_logs_data`), internal network `ml-grid-net`, container healthchecks, and auto-restart policy.
 - [x] **`deploy/production.env.example`**: Complete production environment template with port, log level, and config file specifications.
 - [x] **`scripts/run_all_tests.py`**: Self-contained automated test suite validating configuration schemas, module imports, model registry integrity (v9), telemetry loader, and FastAPI routes.
-- [x] **`scripts/deploy.sh`**: Self-contained deployment runner executing in Jenkins workspace; builds image, restarts containers, waits for health endpoint, and prunes unused build cache.
+- [x] **`scripts/run_tests.sh`**: Dual-mode test runner that automatically executes inside Docker container if host Python lacks dependencies (e.g. `sklearn`, `uvicorn`, `pyarrow`).
+- [x] **`scripts/deploy.sh`**: Self-contained deployment runner executing in Jenkins workspace; builds/tags image, restarts containers, waits for health endpoint, and prunes unused build cache.
 - [x] **`scripts/health_check.sh`**: Automated post-deployment smoke test suite verifying `/api/v1/health`, `/api/v1/sites`, `/api/v1/metrics`, `/docs`, and `/` frontend dashboard.
 
 ---
@@ -221,19 +225,41 @@ pipeline {
 1. Push a commit to the `build` branch on GitHub:
    ```bash
    git add .
-   git commit -m "Update Jenkins pipeline with SCM polling"
+   git commit -m "Fix CI/CD: run automated tests inside Docker container to resolve missing host Python dependencies"
    git push origin build
    ```
 2. Wait up to 2 minutes:
    - Jenkins SCM poller detects the new commit.
    - Jenkins automatically launches a new build.
-   - SCM Polling Log (`Git Polling Log` in the Jenkins sidebar) will record:
-     `Changes found` ➔ `Build triggered`.
+   - Stage 1: Branch Validation (passes for `build`)
+   - Stage 2: Checkout SCM
+   - Stage 3: Build Container Image (`ml-prediction-engine:latest` built with all requirements)
+   - Stage 4: Run Automated Tests (all 5 test groups pass inside container)
+   - Stage 5: Build & Deploy Stack (Docker Compose starts container)
+   - Stage 6: Smoke & Health Tests (all 5 endpoints return HTTP 200)
 
 ### Manual Verification
 1. Open Jenkins job console: `http://172.16.10.29:8096/job/ml-prediction-grid-data-pipeline/`.
-2. Inspect pipeline execution stages (Branch Validation ➔ Checkout ➔ Tests ➔ Deploy ➔ Smoke Tests).
+2. Inspect pipeline execution stages.
 3. Confirm API & Dashboard is running:
    ```bash
    curl http://172.16.10.29:8000/api/v1/health
    ```
+
+---
+
+## 8. Incident Analysis & Resolution: Missing Host Python Dependencies
+
+### Root Cause
+In previous pipeline runs, `scripts/run_all_tests.py` was invoked directly on the bare host machine (`python3 scripts/run_all_tests.py`).
+The Linux Jenkins host (`172.16.10.29`) only has base Python installed without data science/ML packages (`scikit-learn`, `uvicorn`, `pyarrow`).
+Consequently, the test suite reported:
+- `Import: quality_gate.evaluator (No module named 'sklearn')`
+- `Import: api.main (No module named 'uvicorn')`
+- `Telemetry Loader Check (Missing optional dependency 'pyarrow')`
+- `FastAPI Route Registration (No module named 'uvicorn')`
+
+### Resolution
+1. **Container-Isolated Testing**: The pipeline now builds `ml-prediction-engine:latest` before testing, and runs `docker run --rm ml-prediction-engine:latest python scripts/run_all_tests.py`. Inside the container, all dependencies from `requirements.txt` are already installed and verified.
+2. **Zero Host Dependency**: The Jenkins host agent requires no pip packages, virtual environments, or compilation tools.
+3. **Image Cache Reuse**: The image tested in Stage 4 is immediately deployed in Stage 5 via `docker compose`, ensuring complete environment fidelity between testing and production.

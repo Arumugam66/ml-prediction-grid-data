@@ -10,6 +10,7 @@ pipeline {
     environment {
         PYTHONUNBUFFERED = '1'
         APP_PORT = '8000'
+        IMAGE_NAME = 'ml-prediction-engine:latest'
     }
 
     stages {
@@ -35,15 +36,17 @@ pipeline {
             }
         }
 
+        stage('Build Container Image') {
+            steps {
+                echo "Building production container image: ${IMAGE_NAME}..."
+                sh "docker build -t ${IMAGE_NAME} -f Dockerfile ."
+            }
+        }
+
         stage('Run Automated Tests') {
             steps {
-                sh '''
-                    if command -v python3 >/dev/null 2>&1; then
-                        python3 scripts/run_all_tests.py
-                    else
-                        python scripts/run_all_tests.py
-                    fi
-                '''
+                echo "Executing automated test suite inside isolated container environment..."
+                sh "docker run --rm ${IMAGE_NAME} python scripts/run_all_tests.py"
             }
         }
 

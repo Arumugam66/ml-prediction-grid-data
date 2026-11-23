@@ -7,6 +7,7 @@ echo "=========================================================="
 
 WORKSPACE_DIR="$(pwd)"
 COMPOSE_FILE="${WORKSPACE_DIR}/deploy/docker-compose.prod.yml"
+PROJECT_NAME="ml-prediction-stack"
 
 # Ensure log directory exists
 mkdir -p "${WORKSPACE_DIR}/logs"
@@ -28,22 +29,39 @@ elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/n
     COMPOSE_CMD="docker-compose"
     echo "Using standalone Docker Compose (docker-compose)..."
 else
-    echo "Docker Compose plugin/binary not detected. Deploying via native Docker Engine..."
+    echo "Docker Compose not detected. Will deploy via native Docker Engine..."
 fi
 
+# 1. Cleanly stop previous stack deployment if using Compose
 if [ -n "$COMPOSE_CMD" ]; then
-    echo "Deploying via ${COMPOSE_CMD}..."
-    $COMPOSE_CMD -f "${COMPOSE_FILE}" pull --ignore-buildable || true
-    $COMPOSE_CMD -f "${COMPOSE_FILE}" up -d --remove-orphans
+    echo "Stopping existing ${PROJECT_NAME} containers if running..."
+    $COMPOSE_CMD -p "${PROJECT_NAME}" -f "${COMPOSE_FILE}" down || true
+fi
+
+# 2. Release host port 8000 if held by any stale container
+EXISTING_PORT_8000=$(docker ps -q --filter "publish=8000" || true)
+if [ -n "$EXISTING_PORT_8000" ]; then
+    echo "Releasing host port 8000 from container(s): ${EXISTING_PORT_8000}..."
+    docker stop ${EXISTING_PORT_8000} >/dev/null 2>&1 || true
+    docker rm -f ${EXISTING_PORT_8000} >/dev/null 2>&1 || true
+fi
+
+# 3. Ensure any existing container named ml-prediction-engine is completely cleared
+if docker ps -a -q --filter "name=^ml-prediction-engine$" | grep -q .; then
+    echo "Removing existing container named ml-prediction-engine..."
+    docker stop ml-prediction-engine >/dev/null 2>&1 || true
+    docker rm -f ml-prediction-engine >/dev/null 2>&1 || true
+fi
+
+# 4. Deploy the stack (Compose or native Docker fallback)
+if [ -n "$COMPOSE_CMD" ]; then
+    echo "Deploying via ${COMPOSE_CMD} (Project: ${PROJECT_NAME})..."
+    $COMPOSE_CMD -p "${PROJECT_NAME}" -f "${COMPOSE_FILE}" up -d
 else
     echo "Ensuring Docker volumes and network exist..."
     docker volume create ml_models_data >/dev/null 2>&1 || true
     docker volume create ml_logs_data >/dev/null 2>&1 || true
     docker network create ml-grid-net >/dev/null 2>&1 || true
-
-    echo "Stopping any existing container..."
-    docker stop ml-prediction-engine >/dev/null 2>&1 || true
-    docker rm -f ml-prediction-engine >/dev/null 2>&1 || true
 
     echo "Launching container ml-prediction-engine:latest..."
     docker run -d \

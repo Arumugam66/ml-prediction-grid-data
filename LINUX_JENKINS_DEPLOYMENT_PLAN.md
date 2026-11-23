@@ -295,3 +295,22 @@ Updated `scripts/deploy.sh` with auto-detecting deployment logic:
 2. Tests if `docker-compose version` works (V1/standalone binary).
 3. If neither Compose variant is installed, automatically executes a native `docker run` using the pre-built `ml-prediction-engine:latest` container with identical persistent named volumes (`ml_models_data`, `ml_logs_data`), bridge network (`ml-grid-net`), restart policies, and port bindings.
 4. Uses `docker logs ml-prediction-engine` on timeout failures instead of Compose-dependent commands.
+
+---
+
+## 11. Incident Analysis & Resolution: Host Port 8000 Address In Use & Compose Project Isolation
+
+### Root Cause
+1. **Port Collision**: When `docker-compose up -d` executed, host port `0.0.0.0:8000` was already occupied by an earlier running container or stale instance (`Host is already in use by another container`), preventing the new container from binding.
+2. **Unscoped `--remove-orphans`**: Without an explicit Compose project name, standalone `docker-compose` interpreted containers from other projects on the host (e.g., `rams-kafka`, `rams-zookeeper`) as orphaned containers belonging to the `deploy` folder.
+3. **Invalid `pull` Flag**: Standalone `docker-compose pull --ignore-buildable` failed because `--ignore-buildable` is a V2-only flag.
+
+### Resolution
+Updated `scripts/deploy.sh`:
+1. **Isolated Project Name**: Added `-p ml-prediction-stack` to all Compose invocations (`$COMPOSE_CMD -p ml-prediction-stack -f "${COMPOSE_FILE}" ...`). This prevents Compose from ever touching other stacks or containers.
+2. **Pre-Deployment Port & Name Cleanup**:
+   - Executes `$COMPOSE_CMD -p ml-prediction-stack ... down || true`.
+   - Explicitly finds and stops any container publishing port 8000: `docker ps -q --filter "publish=8000"`.
+   - Force-removes any container named `ml-prediction-engine`.
+3. **Removed Redundant `pull`**: Because the container image is built in Stage 3, the unnecessary `pull` step was removed.
+4. **Clean `up -d`**: Launches cleanly without port or name collisions.

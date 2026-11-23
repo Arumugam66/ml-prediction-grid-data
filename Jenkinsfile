@@ -36,6 +36,7 @@ pipeline {
             }
         }
 
+
         stage('Build Container Image') {
             steps {
                 echo "Building production container image: ${IMAGE_NAME}..."

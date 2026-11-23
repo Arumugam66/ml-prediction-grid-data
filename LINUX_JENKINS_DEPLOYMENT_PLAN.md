@@ -263,3 +263,16 @@ Consequently, the test suite reported:
 1. **Container-Isolated Testing**: The pipeline now builds `ml-prediction-engine:latest` before testing, and runs `docker run --rm ml-prediction-engine:latest python scripts/run_all_tests.py`. Inside the container, all dependencies from `requirements.txt` are already installed and verified.
 2. **Zero Host Dependency**: The Jenkins host agent requires no pip packages, virtual environments, or compilation tools.
 3. **Image Cache Reuse**: The image tested in Stage 4 is immediately deployed in Stage 5 via `docker compose`, ensuring complete environment fidelity between testing and production.
+
+---
+
+## 9. Incident Analysis & Resolution: FastAPI `_IncludedRouter` AttributeError
+
+### Root Cause
+FastAPI $\ge$ 0.137.0 stores included sub-routers as `_IncludedRouter` instances rather than flattening them into `app.routes`. Because `_IncludedRouter` does not have a `.path` attribute, reading `route.path` in `scripts/run_all_tests.py` caused:
+```text
+AttributeError: '_IncludedRouter' object has no attribute 'path'
+```
+
+### Resolution
+Updated `scripts/run_all_tests.py` to inspect registered routes via `app.openapi().get("paths", {})` and safe `hasattr(r, "path")` checks. This guarantees compatibility across all current and future versions of FastAPI and Starlette without requiring dependency downgrades.

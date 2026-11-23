@@ -98,13 +98,24 @@ def run_tests():
     # 5. FastAPI App & Routes Test
     try:
         from api.main import app
-        routes = [route.path for route in app.routes]
-        assert "/api/v1/health" in routes
-        assert "/api/v1/predict" in routes
-        assert "/api/v1/metrics" in routes
-        assert "/api/v1/train" in routes
-        assert "/" in routes
-        log_test(f"FastAPI Route Registration ({len(routes)} routes registered)", True)
+
+        # Collect all endpoint paths via OpenAPI schema and safe route attribute checks
+        registered_paths = set(app.openapi().get("paths", {}).keys())
+        for r in getattr(app, "routes", []):
+            if hasattr(r, "path"):
+                registered_paths.add(r.path)
+
+        expected_routes = [
+            "/api/v1/health",
+            "/api/v1/predict",
+            "/api/v1/metrics",
+            "/api/v1/train",
+            "/"
+        ]
+        for route in expected_routes:
+            assert route in registered_paths, f"Route '{route}' not found in registered paths: {registered_paths}"
+
+        log_test(f"FastAPI Route Registration ({len(registered_paths)} endpoints registered)", True)
     except Exception as e:
         log_test("FastAPI Route Registration", False, str(e))
         failures += 1

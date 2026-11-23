@@ -1,10 +1,10 @@
 pipeline {
     agent any
 
-    // Poll GitHub every 2 minutes for new commits on the build branch
+    // Poll GitHub every minute for new commits on the build branch (average ~30s detection)
     // (Bypasses private IP / webhook limitations on 172.16.10.29)
     triggers {
-        pollSCM('H/2 * * * *')
+        pollSCM('* * * * *')
     }
 
     environment {

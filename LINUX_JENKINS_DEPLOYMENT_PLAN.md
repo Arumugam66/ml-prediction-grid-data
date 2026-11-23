@@ -1,9 +1,9 @@
 # Implementation Plan: Linux Server Hosting with Jenkins SCM Polling CI/CD (Updated)
 
 ## Goal Description
-Automate the continuous integration and deployment (CI/CD) of the **Energy Consumption Forecasting ML Engine (Grid Data)** directly from Jenkins on the internal Linux server (`172.16.10.29`) using **Jenkins SCM Polling** (`H/2 * * * *`), eliminating the need for public webhooks or separate host layouts (`/opt/ml-prediction/`).
+Automate the continuous integration and deployment (CI/CD) of the **Energy Consumption Forecasting ML Engine (Grid Data)** directly from Jenkins on the internal Linux server (`172.16.10.29`) using **Jenkins SCM Polling** (`* * * * *`), eliminating the need for public webhooks or separate host layouts (`/opt/ml-prediction/`).
 
-- **Trigger**: **Jenkins SCM Polling (`H/2 * * * *`)** checks GitHub every 2 minutes for new commits on the **`build` (or `Build`) branch**.
+- **Trigger**: **Jenkins SCM Polling (`* * * * *`)** checks GitHub **every minute** (yielding an **average response time of ~30 seconds**) for new commits on the **`build` (or `Build`) branch**.
   - *No public IP or port forwarding required*: Jenkins initiates outbound HTTPS calls to GitHub, solving the `failed to connect to host` error on private IP `172.16.10.29`.
 - **Jenkins Instance**: Pre-installed Jenkins running on **port `8096`** (`http://172.16.10.29:8096`).
 - **No `/opt/...` Layout**: All build, orchestration, docker containers, and data management run self-contained directly within the Jenkins workspace repository directory (`${WORKSPACE}`), using standard Docker Named Volumes (`ml_models_data`, `ml_logs_data`) managed directly by the Docker daemon.
@@ -19,7 +19,7 @@ flowchart TD
     end
 
     subgraph JNK_SVR ["Internal Linux Server (172.16.10.29:8096)"]
-        POLL["Jenkins SCM Poller<br/>Schedule: H/2 * * * *"] -->|"Outbound Git Check (Every 2 mins)"| GH
+        POLL["Jenkins SCM Poller<br/>Schedule: * * * * *<br/>(Every 1 min / ~30s avg)"] -->|"Outbound Git Check"| GH
         GH -->|"New commits detected on 'build'"| TRIGGER["Trigger Pipeline Execution"]
         
         TRIGGER --> CHK_BR{"Is branch Build / build?"}
@@ -107,7 +107,7 @@ Instead of maintaining a separate `/opt/...` host layout:
 ### Why SCM Polling is Used Here:
 - The Linux server uses a private local IP (`172.16.10.29`).
 - GitHub cannot reach `http://172.16.10.29:8096/github-webhook/` without an external public domain or tunnel.
-- With **SCM Polling**, Jenkins initiates the connection **outbound** to GitHub over HTTPS port 443 every 2 minutes. No inbound ports or router changes are required.
+- With **SCM Polling**, Jenkins initiates the connection **outbound** to GitHub over HTTPS port 443 every minute (`* * * * *`), resulting in an **average commit detection latency of ~30 seconds**. No inbound ports or router changes are required.
 
 ### Jenkins Pipeline Trigger Definition:
 ```groovy
@@ -115,8 +115,8 @@ pipeline {
     agent any
 
     triggers {
-        // Poll GitHub every 2 minutes for changes on 'build'
-        pollSCM('H/2 * * * *')
+        // Poll GitHub every minute (* * * * *) -> average ~30s detection window
+        pollSCM('* * * * *')
     }
 
     environment {
@@ -192,9 +192,9 @@ pipeline {
    - ✅ **Check "Poll SCM"**.
    - In the **Schedule** text box, enter:
      ```text
-     H/2 * * * *
+     * * * * *
      ```
-     *(The `H` distributes load and polls approximately every 2 minutes).*
+     *(Polls every minute, delivering an average ~30-second turnaround after git push).*
 4. Under **Pipeline**:
    - **Definition**: Pipeline script from SCM.
    - **SCM**: Git.
@@ -207,7 +207,7 @@ pipeline {
 
 ## 6. Implementation Status (All Artifacts Created & Updated)
 
-- [x] **Updated `Jenkinsfile`**: Added `triggers { pollSCM('H/2 * * * *') }`, automated container build (`Build Container Image`), and container-isolated testing (`docker run --rm ${IMAGE_NAME} python scripts/run_all_tests.py`).
+- [x] **Updated `Jenkinsfile`**: Added `triggers { pollSCM('* * * * *') }` (every 1 min / ~30s average detection), automated container build (`Build Container Image`), and container-isolated testing (`docker run --rm ${IMAGE_NAME} python scripts/run_all_tests.py`).
 - [x] **`Dockerfile` & `.dockerignore`**: Python 3.11-slim container with FastAPI, XGBoost, scikit-learn, pyarrow, and built-in container healthcheck.
 - [x] **`requirements.txt`**: Complete production dependencies specification (fastapi, uvicorn, scikit-learn, xgboost, pyarrow, pandas, pyyaml).
 - [x] **`deploy/docker-compose.prod.yml`**: Explicit `image: ml-prediction-engine:latest` tag, Docker Named Volumes (`ml_models_data`, `ml_logs_data`), internal network `ml-grid-net`, container healthchecks, and auto-restart policy.

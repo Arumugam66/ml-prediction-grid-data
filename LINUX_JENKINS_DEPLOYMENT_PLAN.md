@@ -276,3 +276,22 @@ AttributeError: '_IncludedRouter' object has no attribute 'path'
 
 ### Resolution
 Updated `scripts/run_all_tests.py` to inspect registered routes via `app.openapi().get("paths", {})` and safe `hasattr(r, "path")` checks. This guarantees compatibility across all current and future versions of FastAPI and Starlette without requiring dependency downgrades.
+
+---
+
+## 10. Incident Analysis & Resolution: Docker Compose Plugin Missing (`unknown shorthand flag: 'f' in -f`)
+
+### Root Cause
+When executing `bash scripts/deploy.sh` on the Linux host (`172.16.10.29`), `docker compose -f ...` returned:
+```text
+unknown shorthand flag: 'f' in -f
+Usage: docker [OPTIONS] COMMAND [ARG...]
+```
+This error occurs because the base `docker` binary on the Jenkins host does not have the `docker-compose-plugin` registered, so the CLI dropped `compose` and treated `-f` as an unrecognized flag to base `docker`.
+
+### Resolution
+Updated `scripts/deploy.sh` with auto-detecting deployment logic:
+1. Tests if `docker compose version` works (V2 plugin).
+2. Tests if `docker-compose version` works (V1/standalone binary).
+3. If neither Compose variant is installed, automatically executes a native `docker run` using the pre-built `ml-prediction-engine:latest` container with identical persistent named volumes (`ml_models_data`, `ml_logs_data`), bridge network (`ml-grid-net`), restart policies, and port bindings.
+4. Uses `docker logs ml-prediction-engine` on timeout failures instead of Compose-dependent commands.

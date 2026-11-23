@@ -314,3 +314,17 @@ Updated `scripts/deploy.sh`:
    - Force-removes any container named `ml-prediction-engine`.
 3. **Removed Redundant `pull`**: Because the container image is built in Stage 3, the unnecessary `pull` step was removed.
 4. **Clean `up -d`**: Launches cleanly without port or name collisions.
+
+---
+
+## 12. Incident Analysis & Resolution: Stopped Container Port Holding & Multi-Project Teardown
+
+### Root Cause
+1. **Stopped Containers Retain Ports**: In Docker, `Exited` or `Created` containers still hold host port mappings in the Docker network bridge until explicitly removed via `docker rm`. Filtering only running containers via `docker ps -q` missed stopped containers from earlier builds.
+2. **Cross-Project Scope**: An earlier deployment was run under the default Compose project name `deploy`. Calling `docker-compose -p ml-prediction-stack down` only checked the new project name, leaving the container from `deploy` holding port 8000.
+
+### Resolution
+1. **Multi-Project Teardown**: `scripts/deploy.sh` takes down both `-p ml-prediction-stack` and legacy `-p deploy`.
+2. **Global Container Scan**: Queries `docker ps -a` across all states (`created`, `restarting`, `running`, `exited`, `dead`) for any container mapping `:8000->` and forcefully removes it (`docker rm -f`).
+3. **Endpoint Purge**: Deletes stale bridge networks (`ml-prediction-stack_ml-grid-net`, `deploy_ml-grid-net`) and kills any rogue local processes via `fuser -k`.
+4. **Dynamic Port Resiliency**: If port 8000 is held by an unkillable root system process, automatically falls back to port `8008`, records it in `.active_port`, and `scripts/health_check.sh` tests against the active port.

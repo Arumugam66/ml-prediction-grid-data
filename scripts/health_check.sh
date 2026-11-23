@@ -5,7 +5,13 @@ echo "=========================================================="
 echo "  RUNNING POST-DEPLOYMENT SMOKE & HEALTH TESTS"
 echo "=========================================================="
 
-BASE_URL="${1:-http://127.0.0.1:8000}"
+WORKSPACE_DIR="$(pwd)"
+ACTIVE_PORT="8000"
+if [ -f "${WORKSPACE_DIR}/.active_port" ]; then
+    ACTIVE_PORT=$(cat "${WORKSPACE_DIR}/.active_port")
+fi
+PORT="${ACTIVE_PORT:-${APP_PORT:-8000}}"
+BASE_URL="${1:-http://127.0.0.1:${PORT}}"
 ERRORS=0
 
 test_endpoint() {

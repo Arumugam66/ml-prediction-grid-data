@@ -1,0 +1,37 @@
+services:
+  ml-prediction-engine:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: ml-prediction-engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - CONFIG_PATH=config/config.yaml
+      - MODEL_CONFIG_PATH=config/model_config.yaml
+    volumes:
+      - ml_models_data:/app/models_artifacts
+      - ml_logs_data:/app/logs
+    networks:
+      - ml-grid-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  ml-grid-net:
+    driver: bridge
+
+volumes:
+  ml_models_data:
+    name: ml_models_data
+  ml_logs_data:
+    name: ml_logs_data
